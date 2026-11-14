@@ -18,11 +18,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
 
+
 def inicio(request):
     return JsonResponse({
         'proyecto': 'Earth Jukebox',
         'mensaje': 'API funcionando correctamente'
     })
+
 
 urlpatterns = [
     path('', inicio),

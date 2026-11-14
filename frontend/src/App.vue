@@ -1,7 +1,8 @@
+
 <script setup>
-import HelloWorld from './components/HelloWorld.vue'
+import EarthGlobe from './components/EarthGlobe.vue'
 </script>
 
 <template>
-  <HelloWorld />
+  <EarthGlobe />
 </template>
