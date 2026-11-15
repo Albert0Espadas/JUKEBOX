@@ -1,4 +1,3 @@
-
 <template>
   <div class="globe-container">
 
@@ -148,6 +147,46 @@
         {{ estadoLuces }}
       </p>
 
+      <!-- LLUVIA -->
+      <h3>🌧️ Lluvia</h3>
+
+      <template v-if="lluviaVisual">
+        <template v-if="lluviaVisual.disponible && lluviaVisual.caracteristicas">
+          <p>Precipitación visual detectada</p>
+          <p>Nivel musical: {{ lluviaVisual.caracteristicas.nivel }}</p>
+          <p>
+            Cobertura visual:
+            {{ (lluviaVisual.caracteristicas.cobertura_visual * 100).toFixed(1) }}%
+          </p>
+        </template>
+        <p v-else>Sin señal visual de lluvia.</p>
+      </template>
+
+      <p v-if="estadoLluvia">{{ estadoLluvia }}</p>
+
+      <!-- VEGETACIÓN -->
+      <h3>🌳 Vegetación</h3>
+
+      <template v-if="vegetacionVisual">
+        <template v-if="vegetacionVisual.disponible && vegetacionVisual.clasificacion">
+          <p>
+            Clasificación visual:
+            {{ vegetacionVisual.clasificacion.categoria.replaceAll('_', ' ') }}
+          </p>
+          <p>
+            Nivel musical:
+            {{ vegetacionVisual.clasificacion.nivel }}
+          </p>
+          <p v-if="vegetacionVisual.caracteristicas">
+            Cobertura verde:
+            {{ (vegetacionVisual.caracteristicas.cobertura_verde * 100).toFixed(1) }}%
+          </p>
+        </template>
+        <p v-else>Sin vegetación verde detectada en la imagen.</p>
+      </template>
+
+      <p v-if="estadoVegetacion">{{ estadoVegetacion }}</p>
+
       <!-- ESTADO DEL AUDIO -->
       <p class="audio-status">
         {{ audioActivo
@@ -183,7 +222,13 @@ import {
   detenerVientoVisual,
 
   reproducirLucesNocturnas,
-  detenerLucesNocturnas
+  detenerLucesNocturnas,
+
+  reproducirLluviaVisual,
+  detenerLluviaVisual,
+
+  reproducirVegetacionVisual,
+  detenerVegetacionVisual
 } from '../audio/windAudio.js'
 
 // ============================================
@@ -196,10 +241,14 @@ const ubicacion = ref(null)
 const oceanoVisual = ref(null)
 const vientoVisual = ref(null)
 const lucesNocturnas = ref(null)
+const lluviaVisual = ref(null)
+const vegetacionVisual = ref(null)
 
 const estadoOceano = ref('')
 const estadoViento = ref('')
 const estadoLuces = ref('')
+const estadoLluvia = ref('')
+const estadoVegetacion = ref('')
 
 const cargando = ref(false)
 const error = ref('')
@@ -236,8 +285,9 @@ async function activarSonido() {
   iniciandoAudio = true
 
   try {
-    // Inicia océano, viento y luces.
-    await iniciarAudio()
+    // Inicia los cinco instrumentos.
+    const iniciado = await iniciarAudio()
+    if (!iniciado) throw new Error('No se pudo iniciar Tone.js')
 
     if (!componenteActivo) return
 
@@ -245,7 +295,7 @@ async function activarSonido() {
     error.value = ''
 
     console.log(
-      '🎶 JAKEBOX: tres instrumentos activos'
+      '🎶 JAKEBOX: cinco instrumentos activos'
     )
 
     // Reproducir los datos ya consultados.
@@ -265,6 +315,14 @@ async function activarSonido() {
       reproducirLucesNocturnas(
         lucesNocturnas.value
       )
+    }
+
+    if (lluviaVisual.value?.disponible) {
+      reproducirLluviaVisual(lluviaVisual.value)
+    }
+
+    if (vegetacionVisual.value?.disponible) {
+      reproducirVegetacionVisual(vegetacionVisual.value)
     }
 
   } catch (err) {
@@ -441,7 +499,79 @@ async function consultarLucesNocturnas(
 }
 
 // ============================================
-// CONSULTAR LAS TRES FUENTES NASA
+// CONSULTAR LLUVIA
+// ============================================
+
+async function consultarLluviaVisual(lat, lng, idConsulta) {
+  try {
+    const respuesta = await axios.get(
+      `${API}/lluvia-visual/`,
+      { params: { lat, lon: lng } }
+    )
+
+    if (!componenteActivo || idConsulta !== consultaActual) return
+
+    const datos = respuesta.data
+    lluviaVisual.value = datos
+    estadoLluvia.value = ''
+
+    console.log('🌧️ Datos lluvia:', datos)
+
+    if (!datos.disponible) {
+      detenerLluviaVisual()
+      return
+    }
+
+    if (audioActivo.value) {
+      reproducirLluviaVisual(datos)
+    }
+  } catch (err) {
+    if (!componenteActivo || idConsulta !== consultaActual) return
+
+    console.error('Error lluvia:', err)
+    estadoLluvia.value = 'No se pudo analizar la lluvia.'
+    detenerLluviaVisual()
+  }
+}
+
+// ============================================
+// CONSULTAR VEGETACIÓN
+// ============================================
+
+async function consultarVegetacionVisual(lat, lng, idConsulta) {
+  try {
+    const respuesta = await axios.get(
+      `${API}/vegetacion-visual/`,
+      { params: { lat, lon: lng } }
+    )
+
+    if (!componenteActivo || idConsulta !== consultaActual) return
+
+    const datos = respuesta.data
+    vegetacionVisual.value = datos
+    estadoVegetacion.value = ''
+
+    console.log('🌳 Datos vegetación:', datos)
+
+    if (!datos.disponible) {
+      detenerVegetacionVisual()
+      return
+    }
+
+    if (audioActivo.value) {
+      reproducirVegetacionVisual(datos)
+    }
+  } catch (err) {
+    if (!componenteActivo || idConsulta !== consultaActual) return
+
+    console.error('Error vegetación:', err)
+    estadoVegetacion.value = 'No se pudo analizar la vegetación.'
+    detenerVegetacionVisual()
+  }
+}
+
+// ============================================
+// CONSULTAR LAS CINCO FUENTES NASA
 // ============================================
 
 async function consultarDatosNASA(lat, lng) {
@@ -453,18 +583,24 @@ async function consultarDatosNASA(lat, lng) {
   oceanoVisual.value = null
   vientoVisual.value = null
   lucesNocturnas.value = null
+  lluviaVisual.value = null
+  vegetacionVisual.value = null
 
   estadoOceano.value = ''
   estadoViento.value = ''
   estadoLuces.value = ''
+  estadoLluvia.value = ''
+  estadoVegetacion.value = ''
 
   // Detener notas anteriores.
   detenerOceanoVisual()
   detenerVientoVisual()
   detenerLucesNocturnas()
+  detenerLluviaVisual()
+  detenerVegetacionVisual()
 
   console.log(
-    '🌍 Consultando tres fuentes NASA:',
+    '🌍 Consultando cinco fuentes NASA:',
     { lat, lng }
   )
 
@@ -478,6 +614,14 @@ async function consultarDatosNASA(lat, lng) {
     ),
 
     consultarLucesNocturnas(
+      lat, lng, idConsulta
+    ),
+
+    consultarLluviaVisual(
+      lat, lng, idConsulta
+    ),
+
+    consultarVegetacionVisual(
       lat, lng, idConsulta
     )
   ])

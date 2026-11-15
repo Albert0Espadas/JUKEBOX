@@ -1,584 +1,585 @@
 
-import * as Tone from 'tone'
+import * as Tone from "tone";
 
-// ============================================
-// JAKEBOX — MOTOR DE SONIFICACIÓN NASA
-// Instrumentos:
-// 1. Océano
-// 2. Viento visual
-// 3. Luces nocturnas
-// ============================================
+// =====================================================
+// JAKEBOX - ORQUESTA TERRESTRE
+// Sonificación visual de datos NASA
+//
+// 🌊 Océano: melodía grave
+// 💨 Viento: atmósfera sonora
+// 🌃 Luces nocturnas: notas agudas
+// 🌧️ Lluvia: percusión
+// =====================================================
 
-// ===== OCÉANO =====
+let audioIniciado = false;
 
-let sintetizadorOceano = null
-let filtroOceano = null
-let reverbOceano = null
-let volumenOceano = null
-let inicioOceanoPendiente = null
+// Instrumentos
+let sintetizadorOceano = null;
+let sintetizadorViento = null;
+let sintetizadorLuces = null;
+let sintetizadorLluvia = null;
 
-// ===== VIENTO =====
+// Efectos
+let filtroOceano = null;
+let filtroViento = null;
+let filtroLuces = null;
 
-let sintetizadorViento = null
-let filtroViento = null
-let paneoViento = null
-let reverbViento = null
-let volumenViento = null
-let inicioVientoPendiente = null
+let panoramaViento = null;
 
-// ===== LUCES NOCTURNAS =====
+let reverbOceano = null;
+let reverbViento = null;
+let reverbLuces = null;
 
-let sintetizadorLuces = null
-let filtroLuces = null
-let reverbLuces = null
-let volumenLuces = null
-let inicioLucesPendiente = null
+// Temporizadores para la percusión
+let temporizadoresLluvia = [];
 
-// ============================================
-// ESCALAS MUSICALES
-// ============================================
+// Escalas musicales
+const notasOceano = ["C3", "D3", "E3", "G3", "A3"];
+const notasViento = ["C4", "D4", "E4", "G4", "A4"];
+const notasLuces = ["C5", "E5", "G5", "A5", "C6"];
 
-// Todos los instrumentos utilizan notas
-// compatibles de Do mayor pentatónico.
-
-const notasOceano = [
-  'C3', 'D3', 'E3', 'G3', 'A3'
-]
-
-const notasViento = [
-  'C4', 'D4', 'E4', 'G4', 'A4'
-]
-
-const notasLuces = [
-  'C5', 'E5', 'G5', 'A5', 'C6'
-]
-
-// ============================================
-// FUNCIONES AUXILIARES
-// ============================================
+// =====================================================
+// UTILIDADES
+// =====================================================
 
 function limitar(valor, minimo = 0, maximo = 1) {
-  return Math.max(minimo, Math.min(maximo, valor))
+  const numero = Number(valor);
+
+  if (!Number.isFinite(numero)) {
+    return minimo;
+  }
+
+  return Math.max(minimo, Math.min(maximo, numero));
 }
 
-function seleccionarNota(nivel, notas) {
-  const indice = Math.round(
-    limitar(nivel) * (notas.length - 1)
-  )
+function obtenerNota(notas, nivel) {
+  const indice = Math.min(
+    notas.length - 1,
+    Math.floor(limitar(nivel) * notas.length)
+  );
 
-  return notas[indice]
+  return notas[indice];
 }
 
-// ============================================
-// 1. INICIAR OCÉANO
-// ============================================
+function cancelarPercusion() {
+  temporizadoresLluvia.forEach((id) => clearTimeout(id));
+  temporizadoresLluvia = [];
+}
+
+// =====================================================
+// 🌊 INSTRUMENTO 1: OCÉANO
+// =====================================================
 
 export async function iniciarOceano() {
-  await Tone.start()
+  if (sintetizadorOceano) return;
 
-  if (sintetizadorOceano) return
+  reverbOceano = new Tone.Freeverb({
+    roomSize: 0.75,
+    dampening: 2500
+  }).toDestination();
 
-  if (inicioOceanoPendiente) {
-    return inicioOceanoPendiente
-  }
+  reverbOceano.wet.value = 0.45;
 
-  inicioOceanoPendiente = (async () => {
-    volumenOceano = new Tone.Volume(-18)
-      .toDestination()
+  filtroOceano = new Tone.Filter({
+    frequency: 700,
+    type: "lowpass"
+  }).connect(reverbOceano);
 
-    reverbOceano = new Tone.Reverb({
-      decay: 4,
-      preDelay: 0.05,
-      wet: 0.4
-    }).connect(volumenOceano)
-
-    filtroOceano = new Tone.Filter({
-      type: 'lowpass',
-      frequency: 1100
-    }).connect(reverbOceano)
-
-    sintetizadorOceano = new Tone.Synth({
-      oscillator: {
-        type: 'fatsine',
-        count: 2,
-        spread: 10
-      },
-      envelope: {
-        attack: 0.6,
-        decay: 0.5,
-        sustain: 0.7,
-        release: 2.5
-      }
-    }).connect(filtroOceano)
-
-    await reverbOceano.generate()
-
-    console.log('🌊 Océano listo')
-  })()
-
-  try {
-    await inicioOceanoPendiente
-  } finally {
-    inicioOceanoPendiente = null
-  }
+  sintetizadorOceano = new Tone.Synth({
+    oscillator: {
+      type: "fatsine",
+      count: 3,
+      spread: 12
+    },
+    envelope: {
+      attack: 0.8,
+      decay: 0.6,
+      sustain: 0.35,
+      release: 2.5
+    },
+    volume: -18
+  }).connect(filtroOceano);
 }
 
-// ============================================
-// 2. REPRODUCIR OCÉANO
-// ============================================
-
 export function reproducirOceanoVisual(datos) {
-  if (!sintetizadorOceano) return
+  if (!audioIniciado || !sintetizadorOceano) return;
 
-  if (
-    !datos?.disponible ||
-    !datos?.clasificacion
-  ) {
-    detenerOceanoVisual()
-    return
+  if (!datos?.disponible) {
+    detenerOceanoVisual();
+    return;
   }
 
-  const nivel = Number(
-    datos.clasificacion.nivel
-  )
+  const nivel = limitar(datos.clasificacion?.nivel ?? 0);
 
-  if (!Number.isFinite(nivel)) {
-    detenerOceanoVisual()
-    return
-  }
-
-  const intensidad = limitar(nivel)
-
-  const nota = seleccionarNota(
-    intensidad,
-    notasOceano
-  )
-
-  const ahora = Tone.now()
+  const nota = obtenerNota(notasOceano, nivel);
 
   filtroOceano.frequency.rampTo(
-    500 + intensidad * 1400,
+    250 + nivel * 1100,
     0.5
-  )
+  );
 
-  sintetizadorOceano.triggerRelease(ahora)
+  sintetizadorOceano.volume.rampTo(
+    -24 + nivel * 9,
+    0.5
+  );
 
   sintetizadorOceano.triggerAttackRelease(
     nota,
     3,
-    ahora + 0.06,
-    0.6
-  )
-
-  console.log(
-    '🌊 Océano:',
-    '| Categoría:',
-    datos.clasificacion.categoria,
-    '| Nota:',
-    nota
-  )
+    Tone.now() + 0.02,
+    0.55
+  );
 }
 
-// ============================================
-// 3. DETENER Y DESTRUIR OCÉANO
-// ============================================
-
 export function detenerOceanoVisual() {
-  sintetizadorOceano?.triggerRelease()
+  sintetizadorOceano?.triggerRelease();
 }
 
 export function destruirOceanoVisual() {
-  detenerOceanoVisual()
+  detenerOceanoVisual();
 
-  sintetizadorOceano?.dispose()
-  filtroOceano?.dispose()
-  reverbOceano?.dispose()
-  volumenOceano?.dispose()
+  sintetizadorOceano?.dispose();
+  filtroOceano?.dispose();
+  reverbOceano?.dispose();
 
-  sintetizadorOceano = null
-  filtroOceano = null
-  reverbOceano = null
-  volumenOceano = null
+  sintetizadorOceano = null;
+  filtroOceano = null;
+  reverbOceano = null;
 }
 
-// ============================================
-// 4. INICIAR VIENTO VISUAL
-// ============================================
+// =====================================================
+// 💨 INSTRUMENTO 2: VIENTO
+// =====================================================
 
 export async function iniciarVientoVisual() {
-  await Tone.start()
+  if (sintetizadorViento) return;
 
-  if (sintetizadorViento) return
+  reverbViento = new Tone.Freeverb({
+    roomSize: 0.85,
+    dampening: 3000
+  }).toDestination();
 
-  if (inicioVientoPendiente) {
-    return inicioVientoPendiente
-  }
+  reverbViento.wet.value = 0.6;
 
-  inicioVientoPendiente = (async () => {
-    volumenViento = new Tone.Volume(-20)
-      .toDestination()
+  panoramaViento = new Tone.Panner(0).connect(
+    reverbViento
+  );
 
-    reverbViento = new Tone.Reverb({
-      decay: 2.8,
-      preDelay: 0.03,
-      wet: 0.3
-    }).connect(volumenViento)
+  filtroViento = new Tone.Filter({
+    frequency: 900,
+    type: "lowpass"
+  }).connect(panoramaViento);
 
-    paneoViento = new Tone.Panner(0)
-      .connect(reverbViento)
-
-    filtroViento = new Tone.Filter({
-      type: 'lowpass',
-      frequency: 1500
-    }).connect(paneoViento)
-
-    sintetizadorViento = new Tone.Synth({
-      oscillator: {
-        type: 'sine'
-      },
-      envelope: {
-        attack: 0.25,
-        decay: 0.5,
-        sustain: 0.55,
-        release: 1.8
-      }
-    }).connect(filtroViento)
-
-    await reverbViento.generate()
-
-    console.log('💨 Viento visual listo')
-  })()
-
-  try {
-    await inicioVientoPendiente
-  } finally {
-    inicioVientoPendiente = null
-  }
+  sintetizadorViento = new Tone.Synth({
+    oscillator: {
+      type: "sine"
+    },
+    envelope: {
+      attack: 0.5,
+      decay: 0.5,
+      sustain: 0.3,
+      release: 1.8
+    },
+    volume: -20
+  }).connect(filtroViento);
 }
 
-// ============================================
-// 5. REPRODUCIR VIENTO VISUAL
-// ============================================
-
 export function reproducirVientoVisual(datos) {
-  if (!sintetizadorViento) return
+  if (!audioIniciado || !sintetizadorViento) return;
 
-  if (
-    !datos?.disponible ||
-    !datos?.caracteristicas
-  ) {
-    detenerVientoVisual()
-    return
+  if (!datos?.disponible) {
+    detenerVientoVisual();
+    return;
   }
 
-  const tono = Number(
-    datos.caracteristicas.tono
-  )
+  const caracteristicas = datos.caracteristicas ?? {};
 
-  const saturacion = Number(
-    datos.caracteristicas.saturacion
-  )
+  const tono = limitar(caracteristicas.tono);
+  const saturacion = limitar(caracteristicas.saturacion);
+  const brillo = limitar(caracteristicas.brillo);
 
-  const brillo = Number(
-    datos.caracteristicas.brillo
-  )
+  const nivel = (tono + saturacion) / 2;
+  const nota = obtenerNota(notasViento, nivel);
 
-  if (
-    !Number.isFinite(tono) ||
-    !Number.isFinite(saturacion) ||
-    !Number.isFinite(brillo)
-  ) {
-    detenerVientoVisual()
-    return
-  }
-
-  // Mapeo artístico del color.
-  // No representa velocidad real en m/s.
-
-  const intensidadVisual = limitar(
-    (tono + saturacion) / 2
-  )
-
-  const nota = seleccionarNota(
-    intensidadVisual,
-    notasViento
-  )
-
-  const ahora = Tone.now()
-
-  // Saturación = timbre brillante.
+  // Saturación visual -> apertura del filtro
   filtroViento.frequency.rampTo(
-    650 + limitar(saturacion) * 2000,
+    250 + saturacion * 2800,
     0.4
-  )
+  );
 
-  // Tono = movimiento estéreo artístico.
-  // No representa dirección geográfica.
-  paneoViento.pan.rampTo(
-    limitar(
-      (tono - 0.5) * 1.2,
-      -0.6,
-      0.6
-    ),
+  // Tono visual -> posición estéreo
+  panoramaViento.pan.rampTo(
+    tono * 2 - 1,
     0.5
-  )
+  );
 
-  // Brillo = pequeña variación de volumen.
-  volumenViento.volume.rampTo(
-    -25 + limitar(brillo) * 7,
+  // Brillo visual -> volumen
+  sintetizadorViento.volume.rampTo(
+    -28 + brillo * 13,
     0.4
-  )
-
-  sintetizadorViento.triggerRelease(ahora)
+  );
 
   sintetizadorViento.triggerAttackRelease(
     nota,
     1.8,
-    ahora + 0.06,
-    0.55
-  )
-
-  console.log(
-    '💨 Viento visual:',
-    '| Nota:', nota,
-    '| RGB:', datos.color,
-    '| Nivel:', intensidadVisual.toFixed(2)
-  )
+    Tone.now() + 0.02,
+    0.5
+  );
 }
 
-// ============================================
-// 6. DETENER Y DESTRUIR VIENTO
-// ============================================
-
 export function detenerVientoVisual() {
-  sintetizadorViento?.triggerRelease()
+  sintetizadorViento?.triggerRelease();
 }
 
 export function destruirVientoVisual() {
-  detenerVientoVisual()
+  detenerVientoVisual();
 
-  sintetizadorViento?.dispose()
-  filtroViento?.dispose()
-  paneoViento?.dispose()
-  reverbViento?.dispose()
-  volumenViento?.dispose()
+  sintetizadorViento?.dispose();
+  filtroViento?.dispose();
+  panoramaViento?.dispose();
+  reverbViento?.dispose();
 
-  sintetizadorViento = null
-  filtroViento = null
-  paneoViento = null
-  reverbViento = null
-  volumenViento = null
+  sintetizadorViento = null;
+  filtroViento = null;
+  panoramaViento = null;
+  reverbViento = null;
 }
 
-// ============================================
-// 7. INICIAR LUCES NOCTURNAS
-// ============================================
+// =====================================================
+// 🌃 INSTRUMENTO 3: LUCES NOCTURNAS
+// =====================================================
 
 export async function iniciarLucesNocturnas() {
-  await Tone.start()
+  if (sintetizadorLuces) return;
 
-  if (sintetizadorLuces) return
+  reverbLuces = new Tone.Freeverb({
+    roomSize: 0.65,
+    dampening: 4200
+  }).toDestination();
 
-  if (inicioLucesPendiente) {
-    return inicioLucesPendiente
-  }
+  reverbLuces.wet.value = 0.4;
 
-  inicioLucesPendiente = (async () => {
-    // Las campanas tendrán menos volumen
-    // para no tapar los otros instrumentos.
+  filtroLuces = new Tone.Filter({
+    frequency: 1800,
+    type: "lowpass"
+  }).connect(reverbLuces);
 
-    volumenLuces = new Tone.Volume(-22)
-      .toDestination()
-
-    reverbLuces = new Tone.Reverb({
-      decay: 3.2,
-      preDelay: 0.02,
-      wet: 0.35
-    }).connect(volumenLuces)
-
-    filtroLuces = new Tone.Filter({
-      type: 'lowpass',
-      frequency: 2400
-    }).connect(reverbLuces)
-
-    sintetizadorLuces = new Tone.Synth({
-      oscillator: {
-        type: 'triangle'
-      },
-      envelope: {
-        attack: 0.02,
-        decay: 0.35,
-        sustain: 0.15,
-        release: 1.4
-      }
-    }).connect(filtroLuces)
-
-    await reverbLuces.generate()
-
-    console.log('🌃 Luces nocturnas listas')
-  })()
-
-  try {
-    await inicioLucesPendiente
-  } finally {
-    inicioLucesPendiente = null
-  }
+  sintetizadorLuces = new Tone.Synth({
+    oscillator: {
+      type: "triangle"
+    },
+    envelope: {
+      attack: 0.03,
+      decay: 0.35,
+      sustain: 0.15,
+      release: 1
+    },
+    volume: -22
+  }).connect(filtroLuces);
 }
 
-// ============================================
-// 8. REPRODUCIR LUCES NOCTURNAS
-// ============================================
-
 export function reproducirLucesNocturnas(datos) {
-  if (!sintetizadorLuces) return
+  if (!audioIniciado || !sintetizadorLuces) return;
 
-  if (
-    !datos?.disponible ||
-    !datos?.caracteristicas
-  ) {
-    detenerLucesNocturnas()
-    return
+  if (!datos?.disponible) {
+    detenerLucesNocturnas();
+    return;
   }
 
-  const brillo = Number(
-    datos.caracteristicas.brillo
-  )
+  const caracteristicas = datos.caracteristicas ?? {};
 
-  if (!Number.isFinite(brillo)) {
-    detenerLucesNocturnas()
-    return
-  }
+  const brillo = limitar(caracteristicas.brillo);
+  const proporcion = limitar(
+    caracteristicas.proporcion_iluminada
+  );
 
-  const intensidad = limitar(brillo)
+  const nivel = limitar(
+    brillo * 0.7 + proporcion * 0.3
+  );
 
-  const nota = seleccionarNota(
-    intensidad,
-    notasLuces
-  )
+  const nota = obtenerNota(notasLuces, nivel);
 
-  const ahora = Tone.now()
-
-  // Más brillo = sonido más presente.
   filtroLuces.frequency.rampTo(
-    1300 + intensidad * 2700,
+    1000 + nivel * 4000,
     0.3
-  )
+  );
 
-  volumenLuces.volume.rampTo(
-    -24 + intensidad * 9,
+  sintetizadorLuces.volume.rampTo(
+    -30 + nivel * 14,
     0.3
-  )
-
-  sintetizadorLuces.triggerRelease(ahora)
+  );
 
   sintetizadorLuces.triggerAttackRelease(
     nota,
     1.2,
-    ahora + 0.06,
+    Tone.now() + 0.02,
     0.5
-  )
-
-  console.log(
-    '🌃 Luces nocturnas:',
-    '| Nota:', nota,
-    '| Brillo:', brillo
-  )
+  );
 }
 
-// ============================================
-// 9. DETENER Y DESTRUIR LUCES
-// ============================================
-
 export function detenerLucesNocturnas() {
-  sintetizadorLuces?.triggerRelease()
+  sintetizadorLuces?.triggerRelease();
 }
 
 export function destruirLucesNocturnas() {
-  detenerLucesNocturnas()
+  detenerLucesNocturnas();
 
-  sintetizadorLuces?.dispose()
-  filtroLuces?.dispose()
-  reverbLuces?.dispose()
-  volumenLuces?.dispose()
+  sintetizadorLuces?.dispose();
+  filtroLuces?.dispose();
+  reverbLuces?.dispose();
 
-  sintetizadorLuces = null
-  filtroLuces = null
-  reverbLuces = null
-  volumenLuces = null
+  sintetizadorLuces = null;
+  filtroLuces = null;
+  reverbLuces = null;
 }
 
-// ============================================
-// 10. CONTROLES GENERALES DE JAKEBOX
-// ============================================
+// =====================================================
+// 🌧️ INSTRUMENTO 4: LLUVIA
+// =====================================================
+
+export async function iniciarLluviaVisual() {
+  if (sintetizadorLluvia) return;
+
+  sintetizadorLluvia = new Tone.MembraneSynth({
+    pitchDecay: 0.015,
+    octaves: 3,
+    oscillator: {
+      type: "sine"
+    },
+    envelope: {
+      attack: 0.001,
+      decay: 0.12,
+      sustain: 0,
+      release: 0.08
+    },
+    volume: -20
+  }).toDestination();
+}
+
+export function reproducirLluviaVisual(datos) {
+  if (!audioIniciado || !sintetizadorLluvia) return;
+
+  cancelarPercusion();
+
+  if (!datos?.disponible) {
+    detenerLluviaVisual();
+    return;
+  }
+
+  const caracteristicas = datos.caracteristicas ?? {};
+
+  const nivel = limitar(caracteristicas.nivel);
+  const cobertura = limitar(
+    caracteristicas.cobertura_visual
+  );
+
+  // Intensidad visual -> más golpes
+  const golpes = Math.max(
+    1,
+    Math.round(1 + nivel * 5)
+  );
+
+  // Intensidad visual -> golpes más próximos
+  const intervalo = 380 - nivel * 240;
+
+  // Cobertura visual -> fuerza de la percusión
+  const velocidad = limitar(
+    0.18 + cobertura * 0.38,
+    0.1,
+    0.65
+  );
+
+  for (let i = 0; i < golpes; i++) {
+    const temporizador = setTimeout(() => {
+      if (!audioIniciado || !sintetizadorLluvia) {
+        return;
+      }
+
+      const frecuencia = 100 + nivel * 100 + (i % 2) * 15;
+
+      sintetizadorLluvia.triggerAttackRelease(
+        frecuencia,
+        "32n",
+        Tone.now(),
+        velocidad
+      );
+    }, i * intervalo);
+
+    temporizadoresLluvia.push(temporizador);
+  }
+}
+
+export function detenerLluviaVisual() {
+  cancelarPercusion();
+  sintetizadorLluvia?.triggerRelease();
+}
+
+export function destruirLluviaVisual() {
+  detenerLluviaVisual();
+
+  sintetizadorLluvia?.dispose();
+  sintetizadorLluvia = null;
+}
+
+
+// =====================================================
+// 🌳 INSTRUMENTO 5: VEGETACIÓN
+// =====================================================
+
+let sintetizadorVegetacion = null;
+
+const acordesVegetacion = [
+  ["C4", "E4", "G4"],
+  ["D4", "F4", "A4"],
+  ["E4", "G4", "B4"],
+  ["G4", "B4", "D5"]
+];
+
+export async function iniciarVegetacionVisual() {
+  if (sintetizadorVegetacion) return;
+
+  sintetizadorVegetacion = new Tone.PolySynth(
+    Tone.Synth,
+    {
+      oscillator: {
+        type: "triangle"
+      },
+      envelope: {
+        attack: 0.8,
+        decay: 0.5,
+        sustain: 0.3,
+        release: 2
+      },
+      volume: -25
+    }
+  ).toDestination();
+}
+
+export function reproducirVegetacionVisual(datos) {
+  if (!audioIniciado || !sintetizadorVegetacion) return;
+
+  if (!datos?.disponible) {
+    detenerVegetacionVisual();
+    return;
+  }
+
+  const nivel = limitar(
+    datos.clasificacion?.nivel ?? 0
+  );
+
+  const indice = Math.min(
+    acordesVegetacion.length - 1,
+    Math.floor(nivel * acordesVegetacion.length)
+  );
+
+  sintetizadorVegetacion.volume.rampTo(
+    -32 + nivel * 12,
+    0.5
+  );
+
+  sintetizadorVegetacion.releaseAll();
+
+  sintetizadorVegetacion.triggerAttackRelease(
+    acordesVegetacion[indice],
+    2.5,
+    Tone.now() + 0.05,
+    0.45
+  );
+}
+
+export function detenerVegetacionVisual() {
+  sintetizadorVegetacion?.releaseAll();
+}
+
+export function destruirVegetacionVisual() {
+  detenerVegetacionVisual();
+  sintetizadorVegetacion?.dispose();
+  sintetizadorVegetacion = null;
+}
+
+
+// =====================================================
+// CONTROL GENERAL DE LA ORQUESTA
+// =====================================================
 
 export async function iniciarAudio() {
-  await Tone.start()
+  if (audioIniciado) return true;
 
-  await Promise.all([
-    iniciarOceano(),
-    iniciarVientoVisual(),
-    iniciarLucesNocturnas()
-  ])
+  try {
+    // Los navegadores requieren interacción del usuario.
+    await Tone.start();
 
-  console.log(
-    '🎶 JAKEBOX: tres instrumentos iniciados'
-  )
+    await Promise.all([
+      iniciarOceano(),
+      iniciarVientoVisual(),
+      iniciarLucesNocturnas(),
+      iniciarLluviaVisual(),
+      iniciarVegetacionVisual()
+    ]);
+
+    audioIniciado = true;
+
+    console.log(
+      "🎶 JAKEBOX: orquesta terrestre iniciada"
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "No se pudo iniciar el audio de JAKEBOX:",
+      error
+    );
+
+    return false;
+  }
 }
 
 export function detenerAudio() {
-  detenerOceanoVisual()
-  detenerVientoVisual()
-  detenerLucesNocturnas()
+  audioIniciado = false;
+
+  detenerOceanoVisual();
+  detenerVientoVisual();
+  detenerLucesNocturnas();
+  detenerLluviaVisual();
+  detenerVegetacionVisual();
+
+  console.log("🔇 JAKEBOX: audio detenido");
 }
 
 export function destruirAudio() {
-  detenerAudio()
+  detenerAudio();
 
-  destruirOceanoVisual()
-  destruirVientoVisual()
-  destruirLucesNocturnas()
+  destruirOceanoVisual();
+  destruirVientoVisual();
+  destruirLucesNocturnas();
+  destruirLluviaVisual();
+  destruirVegetacionVisual();
 
-  console.log(
-    '🔇 Recursos de audio liberados'
-  )
+  console.log("🧹 JAKEBOX: instrumentos liberados");
 }
 
-// ============================================
-// 11. PRUEBA RÁPIDA DE AUDIO
-// ============================================
+// =====================================================
+// PRUEBA DE AUDIO
+// =====================================================
 
 export async function probarSonido() {
-  await Tone.start()
+  try {
+    await iniciarAudio();
 
-  const prueba = new Tone.Synth({
-    oscillator: {
-      type: 'sine'
-    }
-  }).toDestination()
+    if (!sintetizadorLuces) return;
 
-  prueba.triggerAttackRelease(
-    'C5',
-    0.5,
-    Tone.now(),
-    0.3
-  )
-
-  setTimeout(() => {
-    prueba.dispose()
-  }, 1500)
+    sintetizadorLuces.triggerAttackRelease(
+      "C5",
+      0.3,
+      Tone.now() + 0.02,
+      0.5
+    );
+  } catch (error) {
+    console.error("Error probando el sonido:", error);
+  }
 }
 
-// ============================================
-// 12. COMPATIBILIDAD CON CÓDIGO ANTIGUO
-// ============================================
-
-// Conservamos esta función para que un
-// componente viejo no falle al importarla.
-// Ya no utiliza los datos MERRA-2.
-
+// Compatibilidad con versiones anteriores
 export function reproducirAtmosfera() {
-  console.warn(
-    'reproducirAtmosfera() está obsoleta. ' +
-    'Utiliza reproducirVientoVisual().'
-  )
+  // Los sonidos se generan a partir de datos NASA.
 }
