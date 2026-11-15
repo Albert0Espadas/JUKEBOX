@@ -1,9 +1,28 @@
 from django.urls import path
 from . import views
 
-
 urlpatterns = [
-    path('inicio/', views.inicio, name='inicio'),
-    path('viento/', views.obtener_viento, name='viento'),
-]
+    path(
+        'inicio/',
+        views.inicio,
+        name='inicio'
+    ),
 
+    path(
+        'oceano-visual/',
+        views.obtener_oceano_visual,
+        name='oceano_visual'
+    ),
+
+    path(
+        'viento-visual/',
+        views.obtener_viento_visual,
+        name='viento_visual'
+    ),
+
+    path(
+        'luces-nocturnas/',
+        views.obtener_luces_nocturnas,
+        name='luces_nocturnas'
+    ),
+]

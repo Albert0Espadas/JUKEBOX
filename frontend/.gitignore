@@ -50,3 +50,13 @@ dist/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Archivos científicos NASA pesados
+*.nc4
+*.nc
+*.h5
+*.hdf5
+
+# Entornos virtuales Python
+venv/
+.venv/

@@ -2,10 +2,10 @@
 <template>
   <div class="globe-container">
 
-    <!-- Planeta 3D -->
+    <!-- PLANETA 3D -->
     <div ref="globeElement" class="globe"></div>
 
-    <!-- Controles de audio -->
+    <!-- CONTROLES DE AUDIO -->
     <div class="audio-controls">
 
       <button
@@ -13,68 +13,147 @@
         @click="activarSonido"
       >
         {{ audioActivo
-          ? ' Desactivar sonido'
-          : ' Activar sonido' }}
+          ? '🔇 Desactivar sonido'
+          : '🎵 Activar sonido' }}
       </button>
 
       <button
         class="test-button"
         @click="probarSonido"
       >
-         Probar audio
+        🔊 Probar audio
       </button>
 
     </div>
 
-    <!-- Panel de información NASA -->
+    <!-- PANEL DE INFORMACIÓN NASA -->
     <div v-if="ubicacion" class="info-panel">
 
-      <h2> Ubicación seleccionada</h2>
+      <h2>🌍 Ubicación seleccionada</h2>
 
       <p>
-        Latitud:
-        {{ ubicacion.lat.toFixed(4) }}°
+        Latitud: {{ ubicacion.lat.toFixed(4) }}°
       </p>
 
       <p>
-        Longitud:
-        {{ ubicacion.lng.toFixed(4) }}°
+        Longitud: {{ ubicacion.lng.toFixed(4) }}°
       </p>
 
       <p v-if="cargando">
-        Consultando datos NASA...
+        Consultando imágenes NASA...
       </p>
 
       <p v-if="error" class="error">
         {{ error }}
       </p>
 
-      <template v-if="viento">
+      <!-- VIENTO -->
+      <h3>💨 Viento</h3>
 
-        <h3> Datos del viento</h3>
+      <template v-if="vientoVisual">
+        <template v-if="
+          vientoVisual.disponible &&
+          vientoVisual.caracteristicas
+        ">
+          <p>Análisis visual disponible</p>
 
-        <p>
-          Velocidad:
-          {{ viento.velocidad }} m/s
+          <p>
+            Tono:
+            {{ vientoVisual.caracteristicas.tono }}
+          </p>
+
+          <p>
+            Saturación:
+            {{ vientoVisual.caracteristicas.saturacion }}
+          </p>
+
+          <p>
+            Brillo:
+            {{ vientoVisual.caracteristicas.brillo }}
+          </p>
+        </template>
+
+        <p v-else>
+          Sin señal visual de viento.
         </p>
-
-        <p>
-          Componente U:
-          {{ viento.u }} m/s
-        </p>
-
-        <p>
-          Componente V:
-          {{ viento.v }} m/s
-        </p>
-
-        <p class="audio-status">
-          {{ audioActivo
-            ? ' Sonificación activada'
-            : ' Sonificación desactivada' }}
-        </p>
-
       </template>
+
+      <p v-if="estadoViento">
+        {{ estadoViento }}
+      </p>
+
+      <!-- OCÉANO -->
+      <h3>🌊 Océano</h3>
+
+      <template v-if="oceanoVisual">
+        <template v-if="
+          oceanoVisual.disponible &&
+          oceanoVisual.clasificacion
+        ">
+          <p>
+            Clasificación visual:
+            {{ oceanoVisual.clasificacion.categoria }}
+          </p>
+
+          <p>
+            Nivel sonoro:
+            {{ oceanoVisual.clasificacion.nivel }}
+          </p>
+        </template>
+
+        <p v-else>
+          Sin señal oceánica en esta región.
+        </p>
+      </template>
+
+      <p v-if="estadoOceano">
+        {{ estadoOceano }}
+      </p>
+
+      <!-- LUCES NOCTURNAS -->
+      <h3>🌃 Luces nocturnas</h3>
+
+      <template v-if="lucesNocturnas">
+        <template v-if="
+          lucesNocturnas.disponible &&
+          lucesNocturnas.caracteristicas
+        ">
+          <p>
+            Brillo promedio:
+            {{ lucesNocturnas.caracteristicas.brillo }}
+          </p>
+
+          <p>
+            Brillo máximo:
+            {{ lucesNocturnas.caracteristicas.brillo_maximo }}
+          </p>
+
+          <p>
+            Píxeles iluminados:
+            {{
+              (
+                lucesNocturnas.caracteristicas
+                  .proporcion_iluminada * 100
+              ).toFixed(1)
+            }}%
+          </p>
+        </template>
+
+        <p v-else>
+          Sin señal de luces nocturnas.
+        </p>
+      </template>
+
+      <p v-if="estadoLuces">
+        {{ estadoLuces }}
+      </p>
+
+      <!-- ESTADO DEL AUDIO -->
+      <p class="audio-status">
+        {{ audioActivo
+          ? '🎶 Sonificación activada'
+          : '🔇 Sonificación desactivada' }}
+      </p>
 
     </div>
 
@@ -93,99 +172,331 @@ import axios from 'axios'
 
 import {
   iniciarAudio,
-  reproducirViento,
   detenerAudio,
   destruirAudio,
-  probarSonido
+  probarSonido,
+
+  reproducirOceanoVisual,
+  detenerOceanoVisual,
+
+  reproducirVientoVisual,
+  detenerVientoVisual,
+
+  reproducirLucesNocturnas,
+  detenerLucesNocturnas
 } from '../audio/windAudio.js'
 
-// Variables reactivas
+// ============================================
+// VARIABLES REACTIVAS
+// ============================================
+
 const globeElement = ref(null)
 const ubicacion = ref(null)
-const viento = ref(null)
+
+const oceanoVisual = ref(null)
+const vientoVisual = ref(null)
+const lucesNocturnas = ref(null)
+
+const estadoOceano = ref('')
+const estadoViento = ref('')
+const estadoLuces = ref('')
+
 const cargando = ref(false)
 const error = ref('')
 const audioActivo = ref(false)
 
-// Variables del globo
+// ============================================
+// VARIABLES DEL GLOBO
+// ============================================
+
 let globo = null
 let resizeObserver = null
+
 let consultaActual = 0
+let componenteActivo = true
+let iniciandoAudio = false
 
-// Activar o desactivar la sonificación
+const API = 'http://127.0.0.1:8000/api'
+
+// ============================================
+// ACTIVAR / DESACTIVAR SONIDO
+// ============================================
+
 async function activarSonido() {
-  try {
-    if (audioActivo.value) {
-      detenerAudio()
-      audioActivo.value = false
-      return
-    }
+  if (iniciandoAudio) return
 
+  if (audioActivo.value) {
+    audioActivo.value = false
+    detenerAudio()
+
+    console.log('🔇 Audio desactivado')
+    return
+  }
+
+  iniciandoAudio = true
+
+  try {
+    // Inicia océano, viento y luces.
     await iniciarAudio()
 
+    if (!componenteActivo) return
+
     audioActivo.value = true
+    error.value = ''
 
-    console.log('Audio de JAKEBOX activado')
+    console.log(
+      '🎶 JAKEBOX: tres instrumentos activos'
+    )
 
-    if (viento.value) {
-      reproducirViento(viento.value)
+    // Reproducir los datos ya consultados.
+    if (oceanoVisual.value?.disponible) {
+      reproducirOceanoVisual(
+        oceanoVisual.value
+      )
+    }
+
+    if (vientoVisual.value?.disponible) {
+      reproducirVientoVisual(
+        vientoVisual.value
+      )
+    }
+
+    if (lucesNocturnas.value?.disponible) {
+      reproducirLucesNocturnas(
+        lucesNocturnas.value
+      )
     }
 
   } catch (err) {
-    console.error('Error al activar sonido:', err)
-    error.value = 'No se pudo activar el audio.'
+    console.error(
+      'Error al activar audio:',
+      err
+    )
+
+    audioActivo.value = false
+    error.value = 'No se pudo activar el sonido.'
+
+  } finally {
+    iniciandoAudio = false
   }
 }
 
-// Consultar viento en la API Django
-async function consultarViento(lat, lng) {
-  const idConsulta = ++consultaActual
+// ============================================
+// CONSULTAR OCÉANO
+// ============================================
 
-  cargando.value = true
-  viento.value = null
-  error.value = ''
-
+async function consultarOceanoVisual(
+  lat,
+  lng,
+  idConsulta
+) {
   try {
     const respuesta = await axios.get(
-      'http://127.0.0.1:8000/api/viento/',
+      `${API}/oceano-visual/`,
       {
-        params: {
-          lat: lat,
-          lon: lng
-        }
+        params: { lat, lon: lng }
       }
     )
 
-    // Ignorar respuestas antiguas
-    if (idConsulta !== consultaActual) return
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
 
-    viento.value = respuesta.data.viento
+    const datos = respuesta.data
 
-    console.log('Datos NASA recibidos:', viento.value)
+    oceanoVisual.value = datos
+    estadoOceano.value = ''
 
-    // Reproducir solamente si está activado
+    console.log('🌊 Datos océano:', datos)
+
+    if (!datos.disponible) {
+      detenerOceanoVisual()
+      return
+    }
+
     if (audioActivo.value) {
-      reproducirViento(viento.value)
+      reproducirOceanoVisual(datos)
     }
 
   } catch (err) {
-    if (idConsulta !== consultaActual) return
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
 
-    console.error('Error al consultar NASA:', err)
+    console.error('Error océano:', err)
 
-    error.value =
-      err.response?.data?.error ||
-      'No se pudieron obtener los datos del viento.'
+    estadoOceano.value =
+      'No se pudo analizar el océano.'
 
-  } finally {
-    if (idConsulta === consultaActual) {
-      cargando.value = false
-    }
+    detenerOceanoVisual()
   }
 }
 
-// Crear el globo terráqueo
+// ============================================
+// CONSULTAR VIENTO
+// ============================================
+
+async function consultarVientoVisual(
+  lat,
+  lng,
+  idConsulta
+) {
+  try {
+    const respuesta = await axios.get(
+      `${API}/viento-visual/`,
+      {
+        params: { lat, lon: lng }
+      }
+    )
+
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
+
+    const datos = respuesta.data
+
+    vientoVisual.value = datos
+    estadoViento.value = ''
+
+    console.log('💨 Datos viento:', datos)
+
+    if (!datos.disponible) {
+      detenerVientoVisual()
+      return
+    }
+
+    if (audioActivo.value) {
+      reproducirVientoVisual(datos)
+    }
+
+  } catch (err) {
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
+
+    console.error('Error viento:', err)
+
+    estadoViento.value =
+      'No se pudo analizar el viento.'
+
+    detenerVientoVisual()
+  }
+}
+
+// ============================================
+// CONSULTAR LUCES NOCTURNAS
+// ============================================
+
+async function consultarLucesNocturnas(
+  lat,
+  lng,
+  idConsulta
+) {
+  try {
+    const respuesta = await axios.get(
+      `${API}/luces-nocturnas/`,
+      {
+        params: { lat, lon: lng }
+      }
+    )
+
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
+
+    const datos = respuesta.data
+
+    lucesNocturnas.value = datos
+    estadoLuces.value = ''
+
+    console.log('🌃 Datos luces:', datos)
+
+    if (!datos.disponible) {
+      detenerLucesNocturnas()
+      return
+    }
+
+    if (audioActivo.value) {
+      reproducirLucesNocturnas(datos)
+    }
+
+  } catch (err) {
+    if (
+      !componenteActivo ||
+      idConsulta !== consultaActual
+    ) return
+
+    console.error('Error luces nocturnas:', err)
+
+    estadoLuces.value =
+      'No se pudieron analizar las luces nocturnas.'
+
+    detenerLucesNocturnas()
+  }
+}
+
+// ============================================
+// CONSULTAR LAS TRES FUENTES NASA
+// ============================================
+
+async function consultarDatosNASA(lat, lng) {
+  const idConsulta = ++consultaActual
+
+  cargando.value = true
+  error.value = ''
+
+  oceanoVisual.value = null
+  vientoVisual.value = null
+  lucesNocturnas.value = null
+
+  estadoOceano.value = ''
+  estadoViento.value = ''
+  estadoLuces.value = ''
+
+  // Detener notas anteriores.
+  detenerOceanoVisual()
+  detenerVientoVisual()
+  detenerLucesNocturnas()
+
+  console.log(
+    '🌍 Consultando tres fuentes NASA:',
+    { lat, lng }
+  )
+
+  await Promise.allSettled([
+    consultarOceanoVisual(
+      lat, lng, idConsulta
+    ),
+
+    consultarVientoVisual(
+      lat, lng, idConsulta
+    ),
+
+    consultarLucesNocturnas(
+      lat, lng, idConsulta
+    )
+  ])
+
+  if (
+    componenteActivo &&
+    idConsulta === consultaActual
+  ) {
+    cargando.value = false
+  }
+}
+
+// ============================================
+// CREAR PLANETA 3D
+// ============================================
+
 onMounted(() => {
+  componenteActivo = true
+
   const elemento = globeElement.value
 
   globo = new Globe(elemento)
@@ -199,23 +510,23 @@ onMounted(() => {
     .showAtmosphere(true)
     .atmosphereColor('#38bdf8')
     .atmosphereAltitude(0.18)
+
     .onGlobeClick(({ lat, lng }) => {
       ubicacion.value = { lat, lng }
 
       console.log(
-        'Coordenadas seleccionadas:',
-        lat,
-        lng
+        '📍 Ubicación seleccionada:',
+        { lat, lng }
       )
 
-      consultarViento(lat, lng)
+      consultarDatosNASA(lat, lng)
     })
 
-  // Rotación automática
+  // ROTACIÓN AUTOMÁTICA
   globo.controls().autoRotate = true
   globo.controls().autoRotateSpeed = 0.35
 
-  // Ajustar el tamaño de la pantalla
+  // AJUSTAR TAMAÑO
   const ajustarTamano = () => {
     if (!globo || !elemento) return
 
@@ -232,12 +543,19 @@ onMounted(() => {
   ajustarTamano()
 })
 
-// Limpiar recursos cuando Vue retire el componente
+// ============================================
+// LIMPIAR RECURSOS
+// ============================================
+
 onUnmounted(() => {
+  componenteActivo = false
   consultaActual++
+
+  audioActivo.value = false
 
   if (resizeObserver) {
     resizeObserver.disconnect()
+    resizeObserver = null
   }
 
   if (globo) {
@@ -246,9 +564,12 @@ onUnmounted(() => {
     globo = null
   }
 
-  // Estas funciones deben estar AQUÍ
   detenerAudio()
   destruirAudio()
+
+  console.log(
+    'JAKEBOX: recursos de audio liberados'
+  )
 })
 </script>
 
@@ -267,6 +588,7 @@ onUnmounted(() => {
   height: 100%;
 }
 
+/* CONTROLES DE AUDIO */
 .audio-controls {
   position: absolute;
   top: 24px;
@@ -305,12 +627,15 @@ onUnmounted(() => {
   background: #1d4ed8;
 }
 
+/* PANEL NASA */
 .info-panel {
   position: absolute;
   left: 24px;
   bottom: 24px;
   z-index: 10;
-  width: 280px;
+  width: 285px;
+  max-height: 70vh;
+  overflow-y: auto;
   padding: 20px;
   border: 1px solid rgba(125, 211, 252, 0.25);
   border-radius: 16px;
@@ -346,4 +671,3 @@ onUnmounted(() => {
   color: #fca5a5;
 }
 </style>
-
